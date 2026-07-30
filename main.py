@@ -7,8 +7,7 @@ from google.genai import types
 
 app = Flask(__name__)
 
-# Inicializar cliente de Gemini usando la clave de API desde variables de entorno
-# Se recomienda configurar GEMINI_API_KEY en las variables de entorno de Cloud Run
+# Lee la API key desde la variable de entorno con guion bajo
 GEMINI_API_KEY = os.environ.get("_GEMINI_API_KEY", os.environ.get("GEMINI_API_KEY", ""))
 
 @app.route('/', methods=['POST', 'GET'])
@@ -27,13 +26,18 @@ def procesar_embarque():
                 "mensaje": "No se recibió el contenido del PDF en base64"
             }), 400
 
+        if not GEMINI_API_KEY:
+            return jsonify({
+                "status": "error",
+                "mensaje": "No se encontró la clave de API de Gemini en el servidor."
+            }), 500
+
         # Convertir Base64 a bytes de PDF
         pdf_bytes = base64.b64decode(pdf_base64)
 
-        # 1. Preparar la llamada a la SDK de Gemini con el archivo adjunto
+        # Inicializar el cliente de Gemini
         client = genai.Client(api_key=GEMINI_API_KEY)
 
-        # Prompt estructurado exigiendo respuesta únicamente en JSON
         prompt = """
         Analiza el siguiente documento PDF de embarque/expediente y extrae la siguiente información estructurada:
         - numero_factura (string)
@@ -46,7 +50,6 @@ def procesar_embarque():
         Responde ÚNICAMENTE con un objeto JSON válido con estas claves exactas. No agregues texto adicional fuera del JSON.
         """
 
-        # Pasar el PDF como parte del contenido multimodal
         part_pdf = types.Part.from_bytes(
             data=pdf_bytes,
             mime_type="application/pdf"
@@ -60,10 +63,8 @@ def procesar_embarque():
             )
         )
 
-        # Parsear la respuesta de la IA
         datos_extraidos = json.loads(response.text)
 
-        # Devolver el resultado formateado
         return jsonify({
             "status": "success",
             "orden_compra": orden_compra,
