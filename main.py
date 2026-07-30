@@ -7,7 +7,8 @@ from google.genai import types
 
 app = Flask(__name__)
 
-GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
+# Revisa tanto la variable de Cloud Run (GEMINI_API_KEY) como la de Cloud Build (_GEMINI_API_KEY)
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY") or os.environ.get("_GEMINI_API_KEY", "")
 
 @app.route('/', methods=['POST', 'GET'])
 def procesar_embarque():
@@ -22,11 +23,17 @@ def procesar_embarque():
         if not pdf_base64:
             return jsonify({"status": "error", "mensaje": "No se recibió el PDF en base64"}), 400
 
+        # Verificar disponibilidad de la API Key antes de hacer la petición
+        if not GEMINI_API_KEY:
+            return jsonify({
+                "status": "error", 
+                "mensaje": "No se encontró la clave GEMINI_API_KEY ni _GEMINI_API_KEY en las variables de entorno."
+            }), 500
+
         pdf_bytes = base64.b64decode(pdf_base64)
         client = genai.Client(api_key=GEMINI_API_KEY)
 
-        # Prompt optimizado para extraer MÚLTIPLES facturas del mismo expediente
-        # Definir el esquema JSON estricto para forzar la respuesta esperada
+        # Esquema JSON estricto para extraer todas las facturas del expediente
         response_schema = {
             "type": "OBJECT",
             "properties": {
@@ -54,22 +61,15 @@ def procesar_embarque():
         Extrae un desglose individual de CADA UNA de las facturas, comprobantes de pago de aduana/impuestos y facturas comerciales de 3M o fletes que encuentres.
         """
 
+        part_pdf = types.Part.from_bytes(data=pdf_bytes, mime_type="application/pdf")
+
+        # Una sola llamada con el esquema JSON obligado
         response = client.models.generate_content(
             model='gemini-3.1-flash-lite',
             contents=[part_pdf, prompt],
             config=types.GenerateContentConfig(
                 response_mime_type="application/json",
                 response_schema=response_schema
-            )
-        )
-
-        part_pdf = types.Part.from_bytes(data=pdf_bytes, mime_type="application/pdf")
-
-        response = client.models.generate_content(
-            model='gemini-3.1-flash-lite',
-            contents=[part_pdf, prompt],
-            config=types.GenerateContentConfig(
-                response_mime_type="application/json"
             )
         )
 
