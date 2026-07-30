@@ -26,28 +26,42 @@ def procesar_embarque():
         client = genai.Client(api_key=GEMINI_API_KEY)
 
         # Prompt optimizado para extraer MÚLTIPLES facturas del mismo expediente
-        prompt = """
-        Analiza detenidamente este expediente PDF de embarque que contiene múltiples facturas y documentos de cobro.
-        
-        Extrae un listado JSON de TODAS las facturas o cobros individuales encontrados en el expediente.
-        
-        Devuelve un objeto JSON con una clave "facturas" que contenga una lista de objetos con esta estructura exacta:
-        {
-          "facturas": [
-            {
-              "numero_factura": "string",
-              "proveedor": "string",
-              "fecha_factura": "YYYY-MM-DD",
-              "monto_total": number,
-              "moneda": "USD o PAB",
-              "resumen_mercancia": "string breve"
-            }
-          ]
+        # Definir el esquema JSON estricto para forzar la respuesta esperada
+        response_schema = {
+            "type": "OBJECT",
+            "properties": {
+                "facturas": {
+                    "type": "ARRAY",
+                    "items": {
+                        "type": "OBJECT",
+                        "properties": {
+                            "numero_factura": {"type": "STRING"},
+                            "proveedor": {"type": "STRING"},
+                            "fecha_factura": {"type": "STRING"},
+                            "monto_total": {"type": "NUMBER"},
+                            "moneda": {"type": "STRING"},
+                            "resumen_mercancia": {"type": "STRING"}
+                        },
+                        "required": ["numero_factura", "proveedor", "monto_total"]
+                    }
+                }
+            },
+            "required": ["facturas"]
         }
 
-        Asegúrate de incluir las facturas de fletes/agencia de aduana y todas las facturas comerciales de mercancía.
-        Responde ÚNICAMENTE con el objeto JSON válido.
+        prompt = """
+        Lee minuciosamente este expediente de embarque de 9 páginas. 
+        Extrae un desglose individual de CADA UNA de las facturas, comprobantes de pago de aduana/impuestos y facturas comerciales de 3M o fletes que encuentres.
         """
+
+        response = client.models.generate_content(
+            model='gemini-3.1-flash-lite',
+            contents=[part_pdf, prompt],
+            config=types.GenerateContentConfig(
+                response_mime_type="application/json",
+                response_schema=response_schema
+            )
+        )
 
         part_pdf = types.Part.from_bytes(data=pdf_bytes, mime_type="application/pdf")
 
