@@ -8,8 +8,8 @@ from google.genai import types
 app = Flask(__name__)
 
 # Inicializar cliente de Gemini usando la clave de API desde variables de entorno
-# Usa exactamente la variable configurada en Cloud Run: _GEMINI_API_KEY
-GEMINI_API_KEY = os.environ.get("_GEMINI_API_KEY", "")
+# Se recomienda configurar GEMINI_API_KEY en las variables de entorno de Cloud Run
+GEMINI_API_KEY = os.environ.get("_GEMINI_API_KEY", os.environ.get("GEMINI_API_KEY", ""))
 
 @app.route('/', methods=['POST', 'GET'])
 def procesar_embarque():
@@ -26,12 +26,6 @@ def procesar_embarque():
                 "status": "error",
                 "mensaje": "No se recibió el contenido del PDF en base64"
             }), 400
-
-        if not GEMINI_API_KEY:
-            return jsonify({
-                "status": "error",
-                "mensaje": "No se encontró la clave de Gemini en la variable _GEMINI_API_KEY"
-            }), 500
 
         # Convertir Base64 a bytes de PDF
         pdf_bytes = base64.b64decode(pdf_base64)
